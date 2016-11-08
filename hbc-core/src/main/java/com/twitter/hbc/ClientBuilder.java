@@ -52,7 +52,7 @@ public class ClientBuilder {
   protected boolean enableGZip;
   protected String name;
   protected RateTracker rateTracker;
-  protected final ExecutorService executorService;
+  protected ExecutorService executorService;
   protected BlockingQueue<Event> eventQueue;
   protected ReconnectionManager reconnectionManager;
   protected int socketTimeoutMillis;
@@ -85,23 +85,11 @@ public class ClientBuilder {
   public ClientBuilder() {
     enableGZip = true;
     name = "hosebird-client-" + clientNum.getAndIncrement();
-    ThreadFactory threadFactory = new ThreadFactoryBuilder()
-            .setDaemon(true)
-            .setNameFormat("hosebird-client-io-thread-%d")
-            .build();
-    executorService = Executors.newSingleThreadExecutor(threadFactory);
-
-    ThreadFactory rateTrackerThreadFactory = new ThreadFactoryBuilder()
-            .setDaemon(true)
-            .setNameFormat("hosebird-client-rateTracker-thread-%d")
-            .build();
-
-    ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1, rateTrackerThreadFactory);
-    rateTracker = new BasicRateTracker(30000, 100, true, scheduledExecutor);
-    reconnectionManager = new BasicReconnectionManager(5);
 
     socketTimeoutMillis = 60000;
     connectionTimeoutMillis = 4000;
+
+    reconnectionManager = new BasicReconnectionManager(5);
 
     schemeRegistry = SchemeRegistryFactory.createDefault();
   }
@@ -204,6 +192,22 @@ public class ClientBuilder {
   }
 
   public BasicClient build() {
+    ThreadFactory threadFactory = new ThreadFactoryBuilder()
+            .setDaemon(true)
+            .setNameFormat(name + "-io-thread-%d")
+            .build();
+    executorService = Executors.newSingleThreadExecutor(threadFactory);
+
+    if (rateTracker == null) {
+      ThreadFactory rateTrackerThreadFactory = new ThreadFactoryBuilder()
+              .setDaemon(true)
+              .setNameFormat(name + "-rateTracker-thread-%d")
+              .build();
+
+      ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1, rateTrackerThreadFactory);
+      rateTracker = new BasicRateTracker(30000, 100, true, scheduledExecutor);
+    }
+
     HttpParams params = new BasicHttpParams();
     if (proxyHost != null) {
       HttpHost proxy = new HttpHost(proxyHost, proxyPort);
